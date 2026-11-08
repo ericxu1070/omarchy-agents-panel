@@ -1,0 +1,7 @@
+{
+  "show": "Show",
+  "hidden": {
+    "one": "%1 hidden",
+    "other": "%1 hidden"
+  }
+}
