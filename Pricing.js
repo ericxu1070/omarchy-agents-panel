@@ -43,10 +43,10 @@ function price(modelUsage) {
   return { usd: usd, tokens: tokens }
 }
 
-// This week's tokens for one agent at the dollars per token its all-time
+// Any token count for one agent at the dollars per token its all-time
 // model and cache mix works out to. Null when none of its models is priced.
-function weekEstimate(weekTokens, modelUsage) {
+function estimate(tokens, modelUsage) {
   var all = price(modelUsage)
-  if (!(all.tokens > 0) || !(weekTokens > 0)) return null
-  return weekTokens * all.usd / all.tokens
+  if (!(all.tokens > 0) || !(tokens > 0)) return null
+  return tokens * all.usd / all.tokens
 }

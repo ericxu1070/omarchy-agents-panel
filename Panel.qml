@@ -767,6 +767,10 @@ Panel {
   // The hero's line rotates through what the token counts add up to across
   // every agent, now that they no longer get charts of their own.
 
+  function costText(usd) {
+    return usd >= 100 ? "$" + Commons.I18n.formatNumber(Math.round(usd), 0) : formatMoney(usd, "USD")
+  }
+
   // exu23: the last 7 days at API list prices. Each agent's tokens are priced
   // at its own all-time model and cache mix, since the records count the
   // week's tokens per day but not per model. Agents with no priced model
@@ -780,14 +784,14 @@ Panel {
       var days = providers[i].recentDays || []
       var tokens = 0
       for (var d = 0; d < days.length; d++) tokens += Number(days[d].messageCount || 0)
-      var cost = Pricing.weekEstimate(tokens, providers[i].modelUsage)
+      var cost = Pricing.estimate(tokens, providers[i].modelUsage)
       if (cost === null) unpriced += tokens
       else usd += cost
     }
     return {
       usd: usd,
       partial: unpriced > 0,
-      text: usd >= 100 ? "$" + Commons.I18n.formatNumber(Math.round(usd), 0) : formatMoney(usd, "USD")
+      text: costText(usd)
     }
   }
 
@@ -1639,6 +1643,8 @@ Panel {
       return list.some(function(d) { return Number(d.messageCount || 0) > 0 }) ? list : []
     }
     property bool showDays: false
+    property bool showDayCost: false
+    readonly property bool priced: provider ? Pricing.estimate(1, provider.modelUsage) !== null : false
     spacing: Style.space(16)
     opacity: root.dragProviderId !== "" && provider && root.dragProviderId === provider.providerId ? 0.5 : 1.0
 
@@ -1796,10 +1802,22 @@ Panel {
           Text {
             anchors.right: parent.right
             textFormat: Text.PlainText
-            text: usage.formatTokenCount(Number(modelData.messageCount || 0))
+            text: section.showDayCost && section.priced
+              ? root.costText(Pricing.estimate(Number(modelData.messageCount || 0), section.provider.modelUsage) || 0)
+              : usage.formatTokenCount(Number(modelData.messageCount || 0))
             color: root.foreground
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
+
+            // exu23: clicking a day's figure flips the whole list between tokens and dollars.
+            MouseArea {
+              anchors.fill: parent
+              anchors.margins: -Style.space(4)
+              enabled: section.priced
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: section.showDayCost = !section.showDayCost
+            }
           }
         }
       }

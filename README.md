@@ -3,6 +3,7 @@
 A fork of Omarchy's Agents bar panel (`omarchy.agents`) with a few additions:
 
 - **Weekly cost estimate.** The 7-day line reads `7d · 1.2B tokens · ~$527 est.`, priced at API list rates from one table, `Pricing.js`. Each agent's week is priced at its all-time model and cache mix, since usage records count the week per day but not per model. Agents with no priced model are left out, and a tooltip says so.
+- **Per-day cost.** Click the plan to open the 7-day list, then click any day's token count to switch the list to dollars, priced the same way. Click again for tokens.
 - **Hide instead of delete.** The close mark on a provider header hides it, with a tooltip, a 5 s Undo toast (`U` from the keyboard), and a "Show hidden (N)" list to bring it back.
 - **Reachable close mark.** Fixes the mark vanishing under the cursor: the unscrollable panel's invisible scroll bar took the hover.
 - **Steady header.** The rotating line waits until every usage record has loaded, instead of showing a total from the first file to arrive.
