@@ -204,7 +204,6 @@ Panel {
     if (!lastHidden) return
     setProviderHidden(lastHidden.id, false)
     lastHidden = null
-    undoTimer.stop()
   }
 
   // Delete hides the agent the cursor is on, and the cursor stays in place.
@@ -784,9 +783,9 @@ Panel {
       var days = providers[i].recentDays || []
       var tokens = 0
       for (var d = 0; d < days.length; d++) tokens += Number(days[d].messageCount || 0)
-      var cost = Pricing.estimate(tokens, providers[i].modelUsage)
-      if (cost === null) unpriced += tokens
-      else usd += cost
+      var rate = Pricing.perToken(providers[i].modelUsage)
+      if (rate === null) unpriced += tokens
+      else usd += tokens * rate
     }
     return {
       usd: usd,
@@ -1102,7 +1101,7 @@ Panel {
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
         if (t === "r" || t === "R") root.refreshNow()
-        else if ((t === "u" || t === "U") && root.lastHidden) root.undoHide()
+        else if (t === "u" || t === "U") root.undoHide()
         else if (t === "m" || t === "M") root.toggleSwitchMode()
         else if (root.addStage === "" && t >= "1" && t <= "9" && Number(t) <= root.accountEntries.length) root.pointAt("account", Number(t) - 1)
       }
@@ -1154,7 +1153,7 @@ Panel {
               x: 0
               y: hero.height + Style.space(6)
               width: hero.width
-              visible: heroHover.hovered && root.weekCost.usd > 0 && root.heroPhrase.indexOf(root.weekCost.text) >= 0
+              visible: heroHover.hovered && root.heroPhrase.indexOf(root.weekCost.text) >= 0
               text: strings.t(root.weekCost.partial ? "weekCostNotePartial" : "weekCostNote")
             }
 
@@ -1644,7 +1643,8 @@ Panel {
     }
     property bool showDays: false
     property bool showDayCost: false
-    readonly property bool priced: provider ? Pricing.estimate(1, provider.modelUsage) !== null : false
+    readonly property var perToken: provider ? Pricing.perToken(provider.modelUsage) : null
+    readonly property bool priced: perToken !== null
     spacing: Style.space(16)
     opacity: root.dragProviderId !== "" && provider && root.dragProviderId === provider.providerId ? 0.5 : 1.0
 
@@ -1803,7 +1803,7 @@ Panel {
             anchors.right: parent.right
             textFormat: Text.PlainText
             text: section.showDayCost && section.priced
-              ? root.costText(Pricing.estimate(Number(modelData.messageCount || 0), section.provider.modelUsage) || 0)
+              ? root.costText(Number(modelData.messageCount || 0) * section.perToken)
               : usage.formatTokenCount(Number(modelData.messageCount || 0))
             color: root.foreground
             font.family: root.fontFamily

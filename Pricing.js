@@ -23,10 +23,10 @@ function rateFor(modelId) {
   return null
 }
 
-// What `modelUsage` ({ modelId: { inputTokens, outputTokens,
-// cacheReadInputTokens, cacheCreationInputTokens } }) would cost at list
-// price, and how many of its tokens that covers.
-function price(modelUsage) {
+// Dollars per token at list price for `modelUsage` ({ modelId: {
+// inputTokens, outputTokens, cacheReadInputTokens, cacheCreationInputTokens } }),
+// counting only priced models. Null when none of them is priced.
+function perToken(modelUsage) {
   var usd = 0
   var tokens = 0
   for (var id in modelUsage || {}) {
@@ -40,13 +40,5 @@ function price(modelUsage) {
     usd += (input * rate.input + output * rate.output + read * rate.cacheRead + write * rate.cacheWrite) / 1e6
     tokens += input + output + read + write
   }
-  return { usd: usd, tokens: tokens }
-}
-
-// Any token count for one agent at the dollars per token its all-time
-// model and cache mix works out to. Null when none of its models is priced.
-function estimate(tokens, modelUsage) {
-  var all = price(modelUsage)
-  if (!(all.tokens > 0) || !(tokens > 0)) return null
-  return tokens * all.usd / all.tokens
+  return tokens > 0 ? usd / tokens : null
 }
