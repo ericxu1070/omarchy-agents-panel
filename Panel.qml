@@ -190,20 +190,20 @@ Panel {
   }
 
   // Hiding offers an undo for a few seconds; Show hidden brings it back later.
-  property var lastHidden: null
-  Timer { id: undoTimer; interval: 5000; onTriggered: root.lastHidden = null }
+  // Hides made while the undo is still up join it, so one Undo brings back all.
+  property var recentlyHidden: []
+  Timer { id: undoTimer; interval: 5000; onTriggered: root.recentlyHidden = [] }
 
   function hideProvider(provider) {
     if (!provider) return
     setProviderHidden(provider.providerId, true)
-    lastHidden = { id: provider.providerId, name: provider.providerName }
+    recentlyHidden = recentlyHidden.concat([{ id: provider.providerId, name: provider.providerName }])
     undoTimer.restart()
   }
 
   function undoHide() {
-    if (!lastHidden) return
-    setProviderHidden(lastHidden.id, false)
-    lastHidden = null
+    for (var i = 0; i < recentlyHidden.length; i++) setProviderHidden(recentlyHidden[i].id, false)
+    recentlyHidden = []
   }
 
   // Delete hides the agent the cursor is on, and the cursor stays in place.
@@ -827,7 +827,7 @@ Panel {
     }
 
     var phrases = []
-    if (week > 0) phrases.push(weekCost.usd > 0
+    if (week > 0) phrases.push(weekCost.usd >= 0.005
       ? strings.t("weekWithCost").arg(usage.formatTokenCount(week)).arg(weekCost.text)
       : Commons.I18n.tn("agents.tokensThisWeek", week).arg(usage.formatTokenCount(week)))
     if (today > 0) phrases.push(Commons.I18n.tn("agents.tokensToday", today).arg(usage.formatTokenCount(today)))
@@ -852,9 +852,11 @@ Panel {
 
   function showPhrase() {
     var n = summaryPhrases.length
-    // exu23: hold the plain title until every record is in, so the line never
-    // shows a total built from the first file to load.
-    shownPhrase = usage.recordsSettled && n > 0 ? summaryPhrases[phraseIndex % n] : ""
+    // exu23: while a record is still loading, keep what is shown: the plain
+    // title at first, so the line never shows a total built from the first
+    // file, and later the last full line, so a new agent doesn't blank it.
+    if (!usage.recordsSettled) return
+    shownPhrase = n > 0 ? summaryPhrases[phraseIndex % n] : ""
   }
 
   onSummaryPhrasesChanged: if (shownPhrase === "" || summaryPhrases.length <= 1) showPhrase()
@@ -1274,7 +1276,7 @@ Panel {
 
       // exu23: the undo for a hide, pinned to the bottom wherever the page is.
       Rectangle {
-        visible: root.lastHidden !== null
+        visible: root.recentlyHidden.length > 0
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -1288,7 +1290,7 @@ Panel {
         HoverHandler {
           onHoveredChanged: {
             if (hovered) undoTimer.stop()
-            else if (root.lastHidden) undoTimer.restart()
+            else if (root.recentlyHidden.length > 0) undoTimer.restart()
           }
         }
 
@@ -1306,7 +1308,7 @@ Panel {
             anchors.rightMargin: Style.space(10)
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.PlainText
-            text: root.lastHidden ? strings.t("hiddenNotice").arg(root.lastHidden.name) : ""
+            text: strings.t("hiddenNotice").arg(root.recentlyHidden.map(function(h) { return h.name }).join(", "))
             color: root.foreground
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
