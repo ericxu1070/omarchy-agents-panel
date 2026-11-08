@@ -12,6 +12,8 @@ Item {
   property string agentId: ""
   property string path: ""
   property var record: null
+  // True once the file has been read at least once, record or not.
+  property bool settled: false
 
   // The text the current record was parsed from, so a reload that finds the
   // file unchanged doesn't hand every listener an identical new record.
@@ -23,8 +25,8 @@ Item {
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
-    onLoaded: root.parse(text())
-    onLoadFailed: root.clear()
+    onLoaded: { root.parse(text()); root.settled = true }
+    onLoadFailed: { root.clear(); root.settled = true }
   }
 
   // The usage update rewrites records with an atomic mv, which replaces the

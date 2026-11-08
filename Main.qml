@@ -21,6 +21,10 @@ Item {
   property var agentIds: []
   property var agents: []
   property int dataRevision: 0
+  // Every listed record has been read once: totals no longer count only the
+  // first file to arrive.
+  readonly property bool recordsSettled: agentIds.length > 0 && agents.length === agentIds.length
+    && agents.every(function(a) { return a.settled })
 
   Process {
     id: listProcess

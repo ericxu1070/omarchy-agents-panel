@@ -849,10 +849,16 @@ Panel {
 
   function showPhrase() {
     var n = summaryPhrases.length
-    shownPhrase = n > 0 ? summaryPhrases[phraseIndex % n] : ""
+    // exu23: hold the plain title until every record is in, so the line never
+    // shows a total built from the first file to load.
+    shownPhrase = usage.recordsSettled && n > 0 ? summaryPhrases[phraseIndex % n] : ""
   }
 
   onSummaryPhrasesChanged: if (shownPhrase === "" || summaryPhrases.length <= 1) showPhrase()
+  Connections {
+    target: usage
+    function onRecordsSettledChanged() { root.showPhrase() }
+  }
 
   // The held line was written in the language it was shown in; once a new
   // language's strings arrive and the phrases rebuild, show it again.
