@@ -1,7 +1,11 @@
 {
   "show": "Show",
-  "hidden": {
-    "one": "%1 hidden",
-    "other": "%1 hidden"
-  }
+  "hiddenClosed": "Show hidden (%1)",
+  "hiddenOpen": "Hidden (%1)",
+  "hideTooltip": "Hide subscription",
+  "hiddenNotice": "%1 hidden",
+  "undo": "Undo (U)",
+  "weekWithCost": "7d · %1 tokens · ~%2 est.",
+  "weekCostNote": "Estimated at API list prices from each agent's model and cache mix. Subscriptions are not billed per token.",
+  "weekCostNotePartial": "Estimated at API list prices from each agent's model and cache mix; agents without a priced model are left out. Subscriptions are not billed per token."
 }

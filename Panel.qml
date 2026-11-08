@@ -5,6 +5,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
+import "Pricing.js" as Pricing
 
 Panel {
   id: root
@@ -188,11 +189,29 @@ Panel {
       root.bar.shell.updateEntryInline(root.moduleName, entry)
   }
 
+  // Hiding offers an undo for a few seconds; Show hidden brings it back later.
+  property var lastHidden: null
+  Timer { id: undoTimer; interval: 5000; onTriggered: root.lastHidden = null }
+
+  function hideProvider(provider) {
+    if (!provider) return
+    setProviderHidden(provider.providerId, true)
+    lastHidden = { id: provider.providerId, name: provider.providerName }
+    undoTimer.restart()
+  }
+
+  function undoHide() {
+    if (!lastHidden) return
+    setProviderHidden(lastHidden.id, false)
+    lastHidden = null
+    undoTimer.stop()
+  }
+
   // Delete hides the agent the cursor is on, and the cursor stays in place.
   function hideSelected() {
     var index = providerIndexOfKey()
     if (index < 0 || !providers[index]) return
-    setProviderHidden(providers[index].providerId, true)
+    hideProvider(providers[index])
   }
 
   // Dragging an agent by its mark lights the header it would land on, and
@@ -748,6 +767,30 @@ Panel {
   // The hero's line rotates through what the token counts add up to across
   // every agent, now that they no longer get charts of their own.
 
+  // exu23: the last 7 days at API list prices. Each agent's tokens are priced
+  // at its own all-time model and cache mix, since the records count the
+  // week's tokens per day but not per model. Agents with no priced model
+  // are left out, and the tooltip says so.
+  readonly property var weekCost: {
+    var rev = usage.dataRevision
+    var usd = 0
+    var unpriced = 0
+    var providers = usage.enabledProviders
+    for (var i = 0; i < providers.length; i++) {
+      var days = providers[i].recentDays || []
+      var tokens = 0
+      for (var d = 0; d < days.length; d++) tokens += Number(days[d].messageCount || 0)
+      var cost = Pricing.weekEstimate(tokens, providers[i].modelUsage)
+      if (cost === null) unpriced += tokens
+      else usd += cost
+    }
+    return {
+      usd: usd,
+      partial: unpriced > 0,
+      text: usd >= 100 ? "$" + Commons.I18n.formatNumber(Math.round(usd), 0) : formatMoney(usd, "USD")
+    }
+  }
+
   readonly property var summaryPhrases: {
     var rev = usage.dataRevision
     var week = 0
@@ -781,7 +824,9 @@ Panel {
     }
 
     var phrases = []
-    if (week > 0) phrases.push(Commons.I18n.tn("agents.tokensThisWeek", week).arg(usage.formatTokenCount(week)))
+    if (week > 0) phrases.push(weekCost.usd > 0
+      ? strings.t("weekWithCost").arg(usage.formatTokenCount(week)).arg(weekCost.text)
+      : Commons.I18n.tn("agents.tokensThisWeek", week).arg(usage.formatTokenCount(week)))
     if (today > 0) phrases.push(Commons.I18n.tn("agents.tokensToday", today).arg(usage.formatTokenCount(today)))
     var topModel = ""
     for (var model in byModel) if (topModel === "" || byModel[model] > byModel[topModel]) topModel = model
@@ -1047,6 +1092,7 @@ Panel {
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
         if (t === "r" || t === "R") root.refreshNow()
+        else if ((t === "u" || t === "U") && root.lastHidden) root.undoHide()
         else if (t === "m" || t === "M") root.toggleSwitchMode()
         else if (root.addStage === "" && t >= "1" && t <= "9" && Number(t) <= root.accountEntries.length) root.pointAt("account", Number(t) - 1)
       }
@@ -1068,6 +1114,9 @@ Panel {
         ScrollBar.vertical: ScrollBar {
           id: panelScroll
           policy: ScrollBar.AsNeeded
+          // Unscrollable, the column runs under it, and even unseen it would
+          // take the hover from every header's close mark.
+          visible: panelFlick.interactive
         }
 
         Column {
@@ -1088,6 +1137,16 @@ Panel {
             meta: root.heroPhrase
             foreground: root.foreground
             fontFamily: root.fontFamily
+
+            HoverHandler { id: heroHover }
+            PanelToolTip {
+              // Below the hero and as wide as it: above, it runs off the panel.
+              x: 0
+              y: hero.height + Style.space(6)
+              width: hero.width
+              visible: heroHover.hovered && root.weekCost.usd > 0 && root.heroPhrase.indexOf(root.weekCost.text) >= 0
+              text: strings.t(root.weekCost.partial ? "weekCostNotePartial" : "weekCostNote")
+            }
 
             iconComponent: Component {
               Text {
@@ -1200,6 +1259,58 @@ Panel {
             font.pixelSize: Style.font.caption
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
+          }
+        }
+      }
+
+      // exu23: the undo for a hide, pinned to the bottom wherever the page is.
+      Rectangle {
+        visible: root.lastHidden !== null
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        implicitHeight: undoRow.implicitHeight + Style.space(16)
+        radius: Style.cornerRadius
+        color: Commons.Color.popups.background
+        border.width: 1
+        border.color: Commons.Color.popups.border
+
+        // Held open while the pointer is on it, Undo included.
+        HoverHandler {
+          onHoveredChanged: {
+            if (hovered) undoTimer.stop()
+            else if (root.lastHidden) undoTimer.restart()
+          }
+        }
+
+        Item {
+          id: undoRow
+          anchors.fill: parent
+          anchors.leftMargin: Style.space(12)
+          anchors.rightMargin: Style.space(12)
+          implicitHeight: undoLabel.implicitHeight
+
+          Text {
+            id: undoLabel
+            anchors.left: parent.left
+            anchors.right: undoLink.left
+            anchors.rightMargin: Style.space(10)
+            anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
+            text: root.lastHidden ? strings.t("hiddenNotice").arg(root.lastHidden.name) : ""
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            elide: Text.ElideRight
+          }
+
+          TextLink {
+            id: undoLink
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            text: strings.t("undo")
+            idleColor: Commons.Color.accent
+            onClicked: root.undoHide()
           }
         }
       }
@@ -1423,7 +1534,7 @@ Panel {
         id: hiddenLabel
         anchors.left: parent.left
         textFormat: Text.PlainText
-        text: strings.tn("hidden", usage.hiddenProviders.length).arg(Commons.I18n.formatNumber(usage.hiddenProviders.length))
+        text: strings.t(root.showHidden ? "hiddenOpen" : "hiddenClosed").arg(Commons.I18n.formatNumber(usage.hiddenProviders.length))
           + (root.showHidden ? " ▾" : " ▸")
         color: hiddenArea.containsMouse || hiddenHead.lit ? root.foreground : root.dim
         font.family: root.fontFamily
@@ -1594,32 +1705,44 @@ Panel {
       // space is always kept so the plan beside it doesn't shift on hover.
       HoverHandler { id: headHover }
 
-      Text {
+      // The hit box fills the row's height and stays inside it, so the
+      // header's hover never ends before the mark does.
+      Item {
         id: hideMark
         anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        textFormat: Text.PlainText
-        text: "󰅖"
-        color: hideArea.containsMouse ? root.urgent : root.dim
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: Style.space(22)
         opacity: headHover.hovered || sectionHead.lit ? 1 : 0
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
         Behavior on opacity { NumberAnimation { duration: Style.duration(120); easing.type: Easing.OutCubic } }
+
+        Text {
+          anchors.centerIn: parent
+          textFormat: Text.PlainText
+          text: "󰅖"
+          color: hideArea.containsMouse ? root.urgent : root.dim
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+        }
 
         MouseArea {
           id: hideArea
           anchors.fill: parent
-          anchors.margins: -Style.space(4)
           enabled: hideMark.opacity > 0 && root.dragProviderId === ""
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
-          onClicked: if (section.provider) root.setProviderHidden(section.provider.providerId, true)
+          onClicked: root.hideProvider(section.provider)
+        }
+
+        PanelToolTip {
+          visible: hideArea.containsMouse
+          text: strings.t("hideTooltip")
         }
       }
 
       Text {
         anchors.right: hideMark.left
-        anchors.rightMargin: Style.space(10)
+        anchors.rightMargin: Style.space(4)
         anchors.verticalCenter: parent.verticalCenter
         visible: !section.multi
         textFormat: Text.PlainText
